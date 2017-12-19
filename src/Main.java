@@ -12,7 +12,7 @@ public class Main {
         String command = reader.nextLine();
         while (!command.equals("exit")) {
             if (command.equals("again")) {
-                JarLoader.inputURL();
+                JarLoader.inputPath();
             } else {
                 commandNumber = cmd.checkCommand(command);
                 switch (commandNumber) {
@@ -30,6 +30,7 @@ public class Main {
                         String className = cmd.getNameFromCommand(commandNumber, command);
                         jarLoader.showClassFields(className);
                         jarLoader.showClassMethods(className);
+                        jarLoader.getConstructor(className);
                         break;
                     case 4:
                         System.out.println("******* Help *******");

@@ -1,13 +1,12 @@
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.Parameter;
+import java.lang.reflect.*;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -15,11 +14,14 @@ public class JarLoader {
     public String jarFileName;
     private final HashMap<String, Class> classes = new HashMap<>();
     private final HashSet<String> packages = new HashSet<>();
-    public static String url;
+    private static String url;
     private String aPackage;
 
     public JarLoader(Scanner url) {
-        this.url = url.nextLine().replace("C:\\", "");
+        JarLoader.url = url.nextLine();
+        Pattern pattern = Pattern.compile("^[^C][^:][^\\\\][A-Za-z0-9[^:*?\"<>|]]+(\\\\[A-Za-z0-9[^:*?\"<>|]])*");
+        Matcher matcher = pattern.matcher(JarLoader.url);
+        if(matcher.find()) JarLoader.url = "C:\\" + JarLoader.url;
     }
 
     public void loadClassesFromJarFile() throws IOException, ClassNotFoundException {
@@ -27,11 +29,10 @@ public class JarLoader {
         List<String> classNames;
         classNames = loadClassNames();
 
-        File jarFile = new File("..\\" + url + "\\" + jarFileName);
-        ClassLoader classLoader = null;
-        if (classLoader == null) {
-            classLoader = this.getClass().getClassLoader();
-        }
+        File jarFile = new File(url + "\\" + jarFileName);
+        ClassLoader classLoader;
+        classLoader = this.getClass().getClassLoader();
+
         URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{jarFile.toURI().toURL()}, classLoader);
         for (String className : classNames) {
             classes.put(className, urlClassLoader.loadClass(className));
@@ -46,24 +47,24 @@ public class JarLoader {
     }
 
     public static void showJarFiles() throws InterruptedException, IOException {
-        File dir = new File("..\\" + url);
+        File dir = new File(url);
         File[] listOfFiles = dir.listFiles();
 
-        System.out.println("\nList of .jar files:");
+        System.out.println("List of .jar files:");
         assert listOfFiles != null;
-        try{
-        for (File element : listOfFiles) {
-            System.out.println(element.getName());
-        }
-        System.out.println("In catalog: ");
-        System.out.println(dir.getAbsolutePath());
-        } catch (Exception e){
+        try {
+            for (File element : listOfFiles) {
+                System.out.println(element.getName());
+            }
+            System.out.println("In catalog: ");
+            System.out.println(dir.getAbsolutePath());
+        } catch (Exception e) {
             System.out.println("Try input another path..");
-            inputURL();
+            inputPath();
         }
     }
 
-    public static void inputURL() throws IOException, InterruptedException {
+    public static void inputPath() throws IOException, InterruptedException {
         new JarLoader(new Scanner(System.in));
         JarLoader.showJarFiles();
     }
@@ -71,7 +72,7 @@ public class JarLoader {
     public void showInterfaces() {
         Class cls;
         System.out.println("Interfaces:");
-        for(String pck : packages) {
+        for (String pck : packages) {
             for (Map.Entry<String, Class> entry : classes.entrySet()) {
                 cls = entry.getValue();
                 try {
@@ -79,7 +80,7 @@ public class JarLoader {
                 } catch (Exception e) {
                     aPackage = "no package";
                 }
-                if (cls.isInterface() && (aPackage == pck)) {
+                if (cls.isInterface() && (Objects.equals(aPackage, pck))) {
 
                     System.out.println("\t" + cls.getName());
                 }
@@ -90,7 +91,7 @@ public class JarLoader {
     public void showClasses() {
         Class cls;
         System.out.println("Classes:");
-        for(String pck : packages) {
+        for (String pck : packages) {
             for (Map.Entry<String, Class> entry : classes.entrySet()) {
                 cls = entry.getValue();
                 try {
@@ -99,7 +100,7 @@ public class JarLoader {
                     aPackage = "no package";
                 }
 
-                if (!cls.isInterface() && (aPackage == pck)) {
+                if (!cls.isInterface() && (Objects.equals(aPackage, pck))) {
 
                     System.out.println("\t" + cls.getName());
                 }
@@ -108,7 +109,7 @@ public class JarLoader {
     }
 
     private List<String> loadClassNames() throws IOException {
-        ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream("..\\" + url + "\\" + jarFileName));
+        ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream(url + "\\" + jarFileName));
         List<String> classNames = new ArrayList<>();
 
         for (ZipEntry entry = zipInputStream.getNextEntry(); entry != null; entry = zipInputStream.getNextEntry()) {
@@ -139,7 +140,7 @@ public class JarLoader {
     private void readInterfaceClasses(String interfaceName) {
         boolean empty = true;
         boolean exist = false;
-        Class cls = null;
+        Class cls;
 
         for (Map.Entry<String, Class> entry : classes.entrySet()) {
             cls = entry.getValue();
@@ -156,7 +157,33 @@ public class JarLoader {
             }
             if (empty) System.out.println("No classes is implementing by " + interfaceName + " interface");
         } else
-        System.out.println("Interface " + interfaceName + " not exist");
+            System.out.println("Interface " + interfaceName + " not exist");
+    }
+
+    public void getConstructor(String className) {
+        Class cls;
+        try {
+            cls = this.classes.get(className);
+        } catch (NullPointerException e) {
+            System.out.println("Try input another class:");
+            cls = null;
+        }
+        if (cls != null) {
+            Constructor[] constructors = cls.getDeclaredConstructors();
+            System.out.println("Constructors:");
+            for (Constructor c : constructors) {
+                Class[] paramTypes = c.getParameterTypes();
+                String name = c.getName();
+                System.out.print("- " + Modifier.toString(c.getModifiers()));
+                System.out.print(" " + name + "(");
+                for (int j = 0; j < paramTypes.length; j++) {
+                    if (j > 0)
+                        System.out.print(", ");
+                    System.out.print(paramTypes[j].getCanonicalName());
+                }
+                System.out.println(");");
+            }
+        }
     }
 
     public void showClassFields(String className) {
@@ -214,18 +241,18 @@ public class JarLoader {
             Method[] declaredMethods = cls.getDeclaredMethods();
             System.out.println("Class " + className + " methods");
             for (Method mtd : declaredMethods) {
-                System.out.println("-\t" + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
+                System.out.println("- " + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
                 for (Parameter p : mtd.getParameters()) {
-                    System.out.println("\t\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
+                    System.out.println("\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
                 }
-                System.out.println("\t}");
+                System.out.println("  }");
             }
             for (Method mtd : protectedMethods) {
-                System.out.println("- \t" + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
+                System.out.println("- " + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
                 for (Parameter p : mtd.getParameters()) {
-                    System.out.println("\t\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
+                    System.out.println("\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
                 }
-                System.out.println("\t}");
+                System.out.println("  }");
             }
         } else {
             System.out.println(className + " class not exist.");
