@@ -2,8 +2,12 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.lang.reflect.*;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -16,33 +20,66 @@ public class JarLoader {
     private final HashSet<String> packages = new HashSet<>();
     private static String url;
     private String aPackage;
+    boolean fileExists = false;
+
+    private Class getClassFromClasses(String className){
+        Class cls;
+        cls = this.classes.get(className);
+
+        return cls;
+    }
+
+    private Class getSuperClass(Class cls){
+        Class superClass = null;
+        superClass = cls.getSuperclass();
+
+        return superClass;
+    }
 
     public JarLoader(Scanner url) {
         JarLoader.url = url.nextLine();
         Pattern pattern = Pattern.compile("^[^C][^:][^\\\\][A-Za-z0-9[^:*?\"<>|]]+(\\\\[A-Za-z0-9[^:*?\"<>|]])*");
         Matcher matcher = pattern.matcher(JarLoader.url);
-        if(matcher.find()) JarLoader.url = "C:\\" + JarLoader.url;
+        if (matcher.find()) JarLoader.url = "C:\\" + JarLoader.url;
     }
 
-    public void loadClassesFromJarFile() throws IOException, ClassNotFoundException {
+    public void loadClassesFromJarFile() {
         classes.clear();
         List<String> classNames;
         classNames = loadClassNames();
 
-        File jarFile = new File(url + "\\" + jarFileName);
+        File jarFile;
+        jarFile = new File(url + "\\" + jarFileName);
         ClassLoader classLoader;
         classLoader = this.getClass().getClassLoader();
 
-        URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{jarFile.toURI().toURL()}, classLoader);
-        for (String className : classNames) {
-            classes.put(className, urlClassLoader.loadClass(className));
-            try {
-                packages.add(urlClassLoader.loadClass(className).getPackage().getName());
-            } catch (Exception e) {
-                packages.add("no package");
+        Path file = Paths.get(url + "\\" + jarFileName);
+        boolean isRegularExecutableFile = Files.isRegularFile(file) &
+                Files.isReadable(file) & Files.isExecutable(file);
+        System.out.println(isRegularExecutableFile);
+        URLClassLoader urlClassLoader = null;
+        try {
+            urlClassLoader = new URLClassLoader(new URL[]{jarFile.toURI().toURL()}, classLoader);
+            if (classNames == null) {
+                fileExists = false;
+            } else {
+                fileExists = true;
+                for (String className : classNames) {
+                    classes.put(className, urlClassLoader.loadClass(className));
+                    try {
+                        packages.add(urlClassLoader.loadClass(className).getPackage().getName());
+                    } catch (Exception e) {
+                        packages.add("no package");
+                    }
+                    findClassesAndInterfaces(urlClassLoader.loadClass(className));
+                }
             }
-            findClassesAndInterfaces(urlClassLoader.loadClass(className));
+        } catch (MalformedURLException e) {
+            System.out.println("Pathname of jar file is wrong.");
+        } catch (ClassNotFoundException e) {
+            System.out.println("Class not exist.");
         }
+
 
     }
 
@@ -70,55 +107,72 @@ public class JarLoader {
     }
 
     public void showInterfaces() {
-        Class cls;
-        System.out.println("Interfaces:");
-        for (String pck : packages) {
-            for (Map.Entry<String, Class> entry : classes.entrySet()) {
-                cls = entry.getValue();
-                try {
-                    aPackage = cls.getPackage().getName();
-                } catch (Exception e) {
-                    aPackage = "no package";
-                }
-                if (cls.isInterface() && (Objects.equals(aPackage, pck))) {
+        if (fileExists) {
+            Class cls;
+            System.out.println("Interfaces:");
+            for (String pck : packages) {
+                for (Map.Entry<String, Class> entry : classes.entrySet()) {
+                    cls = entry.getValue();
+                    try {
+                        aPackage = cls.getPackage().getName();
+                    } catch (Exception e) {
+                        aPackage = "no package";
+                    }
+                    if (cls.isInterface() && (Objects.equals(aPackage, pck))) {
 
-                    System.out.println("\t" + cls.getName());
+                        System.out.println("\t" + cls.getName());
+                    }
                 }
             }
         }
     }
 
     public void showClasses() {
-        Class cls;
-        System.out.println("Classes:");
-        for (String pck : packages) {
-            for (Map.Entry<String, Class> entry : classes.entrySet()) {
-                cls = entry.getValue();
-                try {
-                    aPackage = cls.getPackage().getName();
-                } catch (Exception e) {
-                    aPackage = "no package";
-                }
+        if (fileExists) {
+            Class cls;
+            System.out.println("Classes:");
+            for (String pck : packages) {
+                for (Map.Entry<String, Class> entry : classes.entrySet()) {
+                    cls = entry.getValue();
+                    try {
+                        aPackage = cls.getPackage().getName();
+                    } catch (Exception e) {
+                        aPackage = "no package";
+                    }
 
-                if (!cls.isInterface() && (Objects.equals(aPackage, pck))) {
+                    if (!cls.isInterface() && (Objects.equals(aPackage, pck))) {
 
-                    System.out.println("\t" + cls.getName());
+                        System.out.println("\t" + cls.getName());
+                    }
                 }
             }
         }
     }
 
-    private List<String> loadClassNames() throws IOException {
-        ZipInputStream zipInputStream = new ZipInputStream(new FileInputStream(url + "\\" + jarFileName));
-        List<String> classNames = new ArrayList<>();
-
-        for (ZipEntry entry = zipInputStream.getNextEntry(); entry != null; entry = zipInputStream.getNextEntry()) {
-            if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
-                String className = entry.getName().replace('/', '.');
-                classNames.add(className.substring(0, className.length() - ".class".length()));
-            }
+    private List<String> loadClassNames() {
+        ZipInputStream zipInputStream = null;
+        try {
+            zipInputStream = new ZipInputStream(new FileInputStream(url + "\\" + jarFileName));
+        } catch (Exception e) {
+            System.out.println("Jar file " + jarFileName + " not exists");
+            new Scanner(System.in);
         }
-        return classNames;
+        if (zipInputStream != null) {
+            List<String> classNames = new ArrayList<>();
+
+            try {
+                for (ZipEntry entry = zipInputStream.getNextEntry(); entry != null; entry = zipInputStream.getNextEntry()) {
+                    if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
+                        String className = entry.getName().replace('/', '.');
+                        classNames.add(className.substring(0, className.length() - ".class".length()));
+                    }
+                }
+            } catch (IOException e) {
+                System.out.println("Zip input stream not exist.");
+            }
+            return classNames;
+        }
+        return null;
     }
 
     private void findClassesAndInterfaces(Class parentClass) {
@@ -139,35 +193,21 @@ public class JarLoader {
 
     private void readInterfaceClasses(String interfaceName) {
         boolean empty = true;
-        boolean exist = false;
+        boolean interfaceExists = false;
         Class cls;
 
         for (Map.Entry<String, Class> entry : classes.entrySet()) {
             cls = entry.getValue();
-            if (cls.isInterface()) exist = true;
+            if (cls.isInterface()) interfaceExists = true;
 
         }
-        if (exist) {
-            for (Map.Entry<String, Class> entry : classes.entrySet()) {
-                for (Class i : entry.getValue().getInterfaces())
-                    if (interfaceName.equals(i.getName())) {
-                        empty = false;
-                        System.out.println(entry.getValue().getName());
-                    }
-            }
-            if (empty) System.out.println("No classes is implementing by " + interfaceName + " interface");
+        if (interfaceExists) {
+            printInterfaceClasses(interfaceName, empty);
         } else
             System.out.println("Interface " + interfaceName + " not exist");
     }
 
-    public void getConstructor(String className) {
-        Class cls;
-        try {
-            cls = this.classes.get(className);
-        } catch (NullPointerException e) {
-            System.out.println("Try input another class:");
-            cls = null;
-        }
+    public void getConstructor(Class cls) {
         if (cls != null) {
             Constructor[] constructors = cls.getDeclaredConstructors();
             System.out.println("Constructors:");
@@ -176,46 +216,47 @@ public class JarLoader {
                 String name = c.getName();
                 System.out.print("- " + Modifier.toString(c.getModifiers()));
                 System.out.print(" " + name + "(");
-                for (int j = 0; j < paramTypes.length; j++) {
-                    if (j > 0)
-                        System.out.print(", ");
-                    System.out.print(paramTypes[j].getCanonicalName());
-                }
+                printConstructorParam(paramTypes);
                 System.out.println(");");
             }
         }
     }
 
-    public void showClassFields(String className) {
-        Class cls;
-        try {
-            cls = this.classes.get(className);
-        } catch (NullPointerException e) {
-            System.out.println("Try input another class:");
-            cls = null;
-        }
+    public void showClassFields(Class cls) {
         if (cls != null) {
             ArrayList<Field> protectedFields = (ArrayList<Field>) getProtectedFields(cls);
-            Field[] declaredFields = cls.getDeclaredFields();
-            System.out.println("Class " + className + " fields:");
-            for (Field fld : declaredFields) {
-                System.out.println("- " + Modifier.toString(fld.getModifiers()) + " " + fld.getGenericType() + " " + fld.getName());
+            Field[] fields = cls.getDeclaredFields();
+            ArrayList<Field> declaredFields = new ArrayList<>();
+            for (int i = 0; i < fields.length; i++) {
+                declaredFields.add(fields[i]);
             }
-            for (Field fld : protectedFields) {
-                System.out.println("- " + Modifier.toString(fld.getModifiers()) + " " + fld.getGenericType() + " " + fld.getName());
-            }
+            System.out.println("Class " + cls.getSimpleName() + " fields:");
+            printFields(declaredFields);
+            printFields(protectedFields);
         } else {
-            System.out.println(className + " class not exist.");
+            System.out.println(cls.getSimpleName() + " class not exist.");
         }
     }
 
-    private List<Field> getProtectedFields(Class cls) {
-        Class superClass = null;
-        try {
-            superClass = cls.getSuperclass();
-        } catch (NullPointerException e) {
-            System.out.println();
+    public void showClassMethods(Class cls) {
+
+        if (cls != null) {
+            ArrayList<Method> protectedMethods = (ArrayList<Method>) getProtectedMethods(cls);
+            Method[] methods = cls.getDeclaredMethods();
+            ArrayList<Method> declaredMethods = new ArrayList<>();
+            for (int i = 0; i < methods.length; i++) {
+                declaredMethods.add(methods[i]);
+            }
+
+            System.out.println("Class " + cls.getSimpleName() + " methods");
+            printMethods(declaredMethods);
+            printMethods(protectedMethods);
+        } else {
+            System.out.println(cls.getSimpleName() + " class not exist.");
         }
+    }
+
+    private List<Field> getProtectedFields(Class superClass) {
         ArrayList<Field[]> fields = new ArrayList<>();
         List<Field> protectedFields = new ArrayList<>();
         if (superClass != null) {
@@ -229,43 +270,7 @@ public class JarLoader {
         return protectedFields;
     }
 
-    public void showClassMethods(String className) {
-        Class cls = null;
-        try {
-            cls = this.classes.get(className);
-        } catch (NullPointerException e) {
-            System.out.println("Try input another class:");
-        }
-        if (cls != null) {
-            ArrayList<Method> protectedMethods = (ArrayList<Method>) getProtectedMethods(cls);
-            Method[] declaredMethods = cls.getDeclaredMethods();
-            System.out.println("Class " + className + " methods");
-            for (Method mtd : declaredMethods) {
-                System.out.println("- " + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
-                for (Parameter p : mtd.getParameters()) {
-                    System.out.println("\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
-                }
-                System.out.println("  }");
-            }
-            for (Method mtd : protectedMethods) {
-                System.out.println("- " + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
-                for (Parameter p : mtd.getParameters()) {
-                    System.out.println("\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
-                }
-                System.out.println("  }");
-            }
-        } else {
-            System.out.println(className + " class not exist.");
-        }
-    }
-
-    private List<Method> getProtectedMethods(Class cls) {
-        Class superClass = null;
-        try {
-            superClass = cls.getSuperclass();
-        } catch (NullPointerException e) {
-            System.out.println();
-        }
+    private List<Method> getProtectedMethods(Class superClass) {
         ArrayList<Method[]> methods = new ArrayList<>();
         List<Method> outerMethods = new ArrayList<>();
         if (superClass != null) {
@@ -278,5 +283,64 @@ public class JarLoader {
                     outerMethods.add(m);
 
         return outerMethods;
+    }
+
+    private void printFields(ArrayList<Field> declaredFields){
+        for (Field fld : declaredFields) {
+            System.out.println("- " + Modifier.toString(fld.getModifiers()) + " " + fld.getGenericType() + " " + fld.getName());
+        }
+    }
+
+    private void printMethods(ArrayList<Method> methods) {
+        for (Method mtd : methods) {
+            System.out.println("- " + Modifier.toString(mtd.getModifiers()) + " " + mtd.getGenericReturnType() + " " + mtd.getName() + "() {");
+            for (Parameter p : mtd.getParameters()) {
+                System.out.println("\t" + Modifier.toString(p.getModifiers()) + " " + p.getType().getSimpleName() + " " + p.getName());
+            }
+            System.out.println("  }");
+        }
+    }
+    private void printConstructorParam(Class[] paramTypes){
+        for (int j = 0; j < paramTypes.length; j++) {
+            if (j > 0)
+                System.out.print(", ");
+            System.out.print(paramTypes[j].getCanonicalName());
+        }
+    }
+
+    private void printInterfaceClasses(String interfaceName, boolean empty) {
+        for (Map.Entry<String, Class> entry : classes.entrySet()) {
+            for (Class i : entry.getValue().getInterfaces())
+                if (interfaceName.equals(i.getName())) {
+                    empty = false;
+                    System.out.println(entry.getValue().getName());
+                }
+        }
+        if (empty) System.out.println("No classes is implementing by " + interfaceName + " interface");
+    }
+
+    public void printInterfacesAndClasses(Commander cmd, int commandNumber, String command) {
+        jarFileName = cmd.getNameFromCommand(commandNumber, command);
+        loadClassesFromJarFile();
+        showInterfaces();
+        showClasses();
+    }
+
+    public void printClassesOfInterface(Commander cmd, int commandNumber, String command){
+        String interfaceName = cmd.getNameFromCommand(commandNumber, command);
+        showInterfaceClasses(interfaceName);
+    }
+
+    public void printElementsOfClass(Commander cmd, int commandNumber, String command){
+        String className = cmd.getNameFromCommand(commandNumber, command);
+        Class cls = getClassFromClasses(className);
+        if(cls == null){
+            System.out.println(className + " class is not exist.");
+        }
+        else {
+            showClassFields(cls);
+            showClassMethods(cls);
+            getConstructor(cls);
+        }
     }
 }
