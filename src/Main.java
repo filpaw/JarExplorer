@@ -17,36 +17,37 @@ public class Main {
                 commandNumber = cmd.checkCommand(command);
                 switch (commandNumber) {
                     case 1:
-                        jarLoader.jarFileName = cmd.getNameFromCommand(commandNumber, command);
-                        jarLoader.loadClassesFromJarFile();
-                        jarLoader.showInterfaces();
-                        jarLoader.showClasses();
+                        jarLoader.printInterfacesAndClasses(cmd, commandNumber, command);
                         break;
                     case 2:
-                        String interfaceName = cmd.getNameFromCommand(commandNumber, command);
-                        jarLoader.showInterfaceClasses(interfaceName);
+                        jarLoader.printClassesOfInterface(cmd, commandNumber, command);
                         break;
                     case 3:
-                        String className = cmd.getNameFromCommand(commandNumber, command);
-                        jarLoader.showClassFields(className);
-                        jarLoader.showClassMethods(className);
-                        jarLoader.getConstructor(className);
+                        jarLoader.printElementsOfClass(cmd, commandNumber, command);
                         break;
                     case 4:
-                        System.out.println("******* Help *******");
-                        System.out.println("JarExplorer file_name.jar\t\tlist of classes and interfaces in file_name.jar");
-                        System.out.println("JarExplorer -i interface_name\tlist of classes which implements interface_name");
-                        System.out.println("JarExplorer -c class_name\t\tfields and methods existing in class_name");
-                        System.out.println("JarExplorer -h help");
-                        System.out.println("exit\t\"exit\"");
+                        printHelper();
                         break;
                     default:
-                        System.out.println("\nThis command not allowed");
-                        System.out.println("JarExplorer -h help");
+                        printErrorOfCommand();
                 }
             }
             command = reader.nextLine();
 
         }
+    }
+
+    private static void printHelper(){
+        System.out.println("******* Help *******");
+        System.out.println("JarExplorer file_name.jar\t\tlist of classes and interfaces in file_name.jar");
+        System.out.println("JarExplorer -i interface_name\tlist of classes which implements interface_name");
+        System.out.println("JarExplorer -c class_name\t\tfields and methods existing in class_name");
+        System.out.println("JarExplorer -h help");
+        System.out.println("exit\t\"exit\"");
+    }
+
+    private static void printErrorOfCommand() {
+        System.out.println("\nThis command not allowed");
+        System.out.println("JarExplorer -h help");
     }
 }
